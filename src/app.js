@@ -5,6 +5,7 @@ import { SERVER_PORT, SERVER_HOST } from './utils/constant.js';
 import routes from "./routes/product.js"
 import { db } from '../db/db.js';
 
+const app = express()
 
 
 app.use(express.static("public"))

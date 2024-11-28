@@ -4,6 +4,7 @@ import 'dotenv/config'
 import { SERVER_PORT, SERVER_HOST } from './utils/constant.js';
 import routes from "./routes/product.js"
 import { db } from '../db/db.js';
+import path from 'path';
 
 const app = express()
 

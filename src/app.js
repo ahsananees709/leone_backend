@@ -5,6 +5,11 @@ import { SERVER_PORT, SERVER_HOST } from './utils/constant.js';
 import routes from "./routes/product.js"
 import { db } from '../db/db.js';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the current directory using `import.meta.url`
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express()
 

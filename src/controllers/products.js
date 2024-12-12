@@ -115,6 +115,9 @@ const fetchProducts = async (req, res) => {
         rankingsInLast30Days.reduce((sum, rank) => sum + rank.ranking, 0) /
         (rankingsInLast30Days.length || 1); // Avoid division by 0
 
+      const roundedAverageRanking =
+        averageRanking || averageRanking === 0 ? parseFloat(averageRanking.toFixed(2)) : null;
+
       const todaysRanking = product.rankings.find((ranking) => {
         return ranking.created_at.toISOString().split("T")[0] === today;
       });
@@ -124,7 +127,7 @@ const fetchProducts = async (req, res) => {
         title: product.name,
         url: product.url,
         todayRanking: todaysRanking ? todaysRanking.ranking : null,
-        averageRanking: averageRanking || null,
+        averageRanking: roundedAverageRanking,
       };
     });
 

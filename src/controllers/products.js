@@ -3,12 +3,96 @@ import { db } from "../../db/db.js";
 import { Product } from "../../db/schema/product.js";
 import { eq } from "drizzle-orm";
 
+// const fetchProducts = async (req, res) => {
+//   try {
+//     let { page = 1, limit = 10 } = req.query;
+//     page = Number(page);
+//     limit = Number(limit);
+//     const offset = (page - 1) * limit;
+
+//     const allProducts = await db.query.Product.findMany({
+//       with: {
+//         rankings: true,
+//       },
+//     });
+
+//     const today = new Date().toISOString().split("T")[0];
+
+//     let productsWithTodaysRanking = allProducts
+//       .map((product) => {
+//         const todaysRanking = product.rankings.find((ranking) => {
+//           return ranking.created_at.toISOString().split("T")[0] === today;
+//         });
+//         return todaysRanking
+//           ? {
+//               id: product.item_id,
+//               title: product.name,
+//               url: product.url,
+//               todayRanking: todaysRanking.ranking,
+//             }
+//           : null;
+//       })
+//       .filter(Boolean);
+
+//     if (productsWithTodaysRanking.length === 0) {
+//       const latestDate = allProducts.reduce((latest, product) => {
+//         const productLatestDate = product.rankings
+//           .map((ranking) => ranking.created_at.toISOString().split("T")[0])
+//           .sort()
+//           .pop();
+//         return productLatestDate > latest ? productLatestDate : latest;
+//       }, "");
+
+//       productsWithTodaysRanking = allProducts
+//         .map((product) => {
+//           const latestRanking = product.rankings.find((ranking) => {
+//             return ranking.created_at.toISOString().split("T")[0] === latestDate;
+//           });
+//           return latestRanking
+//             ? {
+//                 id: product.item_id,
+//                 title: product.name,
+//                 url: product.url,
+//                 todayRanking: latestRanking.ranking,
+//               }
+//             : null;
+//         })
+//         .filter(Boolean);
+//     }
+
+//     const sortedProducts = productsWithTodaysRanking.sort(
+//       (a, b) => a.todayRanking - b.todayRanking
+//     );
+
+//     const paginatedProducts = sortedProducts.slice(offset, offset + limit);
+//     const totalCount = sortedProducts.length;
+//     const totalPages = Math.ceil(totalCount / limit);
+
+//     const nextPage = page + 1;
+//     let nextPageUrl = null;
+//     if (nextPage <= totalPages) {
+//       const baseUrl = `${req.protocol}://${req.get("host")}${req.baseUrl}`;
+//       const queryString = new URLSearchParams({ ...req.query, page: nextPage }).toString();
+//       nextPageUrl = `${baseUrl}?${queryString}`;
+//     }
+
+//     return successResponse(res, "Products fetched successfully", {
+//       products: paginatedProducts,
+//       totalCount,
+//       totalPages,
+//       nextPageUrl,
+//     });
+//   } catch (error) {
+//     return errorResponse(res, error.message, 500);
+//   }
+// };
+
 const fetchProducts = async (req, res) => {
   try {
     let { page = 1, limit = 10 } = req.query;
-    page = Number(page); 
-    limit = Number(limit); 
-    const offset = (page - 1) * limit; 
+    page = Number(page);
+    limit = Number(limit);
+    const offset = (page - 1) * limit;
 
     const allProducts = await db.query.Product.findMany({
       with: {
@@ -17,53 +101,42 @@ const fetchProducts = async (req, res) => {
     });
 
     const today = new Date().toISOString().split("T")[0];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    let productsWithTodaysRanking = allProducts
-      .map((product) => {
-        const todaysRanking = product.rankings.find((ranking) => {
-          return ranking.created_at.toISOString().split("T")[0] === today;
-        });
-        return todaysRanking
-          ? {
-              id: product.item_id,
-              title: product.name,
-              url: product.url,
-              todayRanking: todaysRanking.ranking,
-            }
-          : null;
-      })
-      .filter(Boolean);
+    // Calculate rankings for the last 30 days
+    const productsWithRankings = allProducts.map((product) => {
+      const rankingsInLast30Days = product.rankings.filter((ranking) => {
+        const rankingDate = new Date(ranking.created_at);
+        return rankingDate >= thirtyDaysAgo && rankingDate <= new Date();
+      });
 
-    if (productsWithTodaysRanking.length === 0) {
-      const latestDate = allProducts.reduce((latest, product) => {
-        const productLatestDate = product.rankings
-          .map((ranking) => ranking.created_at.toISOString().split("T")[0])
-          .sort()
-          .pop();
-        return productLatestDate > latest ? productLatestDate : latest;
-      }, "");
+      const averageRanking =
+        rankingsInLast30Days.reduce((sum, rank) => sum + rank.ranking, 0) /
+        (rankingsInLast30Days.length || 1); // Avoid division by 0
 
-      productsWithTodaysRanking = allProducts
-        .map((product) => {
-          const latestRanking = product.rankings.find((ranking) => {
-            return ranking.created_at.toISOString().split("T")[0] === latestDate;
-          });
-          return latestRanking
-            ? {
-                id: product.item_id,
-                title: product.name,
-                url: product.url,
-                todayRanking: latestRanking.ranking,
-              }
-            : null;
-        })
-        .filter(Boolean);
-    }
+      const todaysRanking = product.rankings.find((ranking) => {
+        return ranking.created_at.toISOString().split("T")[0] === today;
+      });
 
-    const sortedProducts = productsWithTodaysRanking.sort(
-      (a, b) => a.todayRanking - b.todayRanking
-    );
+      return {
+        id: product.item_id,
+        title: product.name,
+        url: product.url,
+        todayRanking: todaysRanking ? todaysRanking.ranking : null,
+        averageRanking: averageRanking || null,
+      };
+    });
 
+    // Sort by average ranking (ascending)
+    const sortedProducts = productsWithRankings.sort((a, b) => {
+      if (a.averageRanking !== b.averageRanking) {
+        return a.averageRanking - b.averageRanking;
+      }
+      return a.todayRanking - b.todayRanking; // Break ties with today's ranking
+    });
+
+    // Paginate the results
     const paginatedProducts = sortedProducts.slice(offset, offset + limit);
     const totalCount = sortedProducts.length;
     const totalPages = Math.ceil(totalCount / limit);
@@ -87,124 +160,8 @@ const fetchProducts = async (req, res) => {
   }
 };
 
-// const fetchProducts = async (req, res) => {
-//   try {
-//     let { page = 1, limit = 10 } = req.query;
-//     page = Number(page);
-//     limit = Number(limit);
-//     const offset = (page - 1) * limit;
 
-//     const allProducts = await db.query.Product.findMany({
-//       with: {
-//         rankings: true,
-//       },
-//     });
 
-//     const today = new Date().toISOString().split("T")[0];
-
-//     const productsWithTodaysRanking = allProducts
-//       .map((product) => {
-//         const todaysRanking = product.rankings.find((ranking) => {
-//           return ranking.created_at.toISOString().split("T")[0] === today;
-//         });
-
-//         return todaysRanking
-//           ? {
-//               id: product.item_id,
-//               title: product.name,
-//               url: product.url,
-//               todayRanking: todaysRanking.ranking,
-//             }
-//           : null;
-//       })
-//       .filter(Boolean);
-
-//     const sortedProducts = productsWithTodaysRanking.sort(
-//       (a, b) => a.todayRanking - b.todayRanking
-//     );
-
-//     const paginatedProducts = sortedProducts.slice(offset, offset + limit);
-//     console.log
-//     const totalCount = sortedProducts.length;
-//     const totalPages = Math.ceil(totalCount / limit);
-
-//     const nextPage = page + 1;
-//     let nextPageUrl = null;
-//     if (nextPage <= totalPages) {
-//       const baseUrl = `${req.protocol}://${req.get("host")}${req.baseUrl}`;
-//       const queryString = new URLSearchParams({ ...req.query, page: nextPage }).toString();
-//       nextPageUrl = `${baseUrl}?${queryString}`;
-//     }
-
-//     return successResponse(res, "Products fetched successfully", {
-//       products: paginatedProducts,
-//       totalCount,
-//       totalPages,
-//       nextPageUrl,
-//     });
-//   } catch (error) {
-//     return errorResponse(res, error.message, 500);
-//   }
-// };
-
-// const fetchProductRankings = async (req, res) => {
-//   try {
-//     let { page = 1, limit = 10, startDate, endDate } = req.query;
-//     page = Number(page);
-//     limit = Number(limit);
-//     const offset = (page - 1) * limit;
-
-//     const result = await db.query.Product.findMany({
-//       with: {
-//         rankings: true,
-//       },
-//     });
-
-//     const productsData = result.map((product) => {
-//       const sortedRankings = product.rankings.sort(
-//         (a, b) => new Date(a.created_at) - new Date(b.created_at)
-//       );
-
-//       const data = sortedRankings.map((ranking) => ({
-//         x: ranking.created_at.toISOString().split("T")[0],
-//         y: ranking.ranking,
-//       }));
-
-//       return {
-//         id: product.item_id,
-//         title: product.name,
-//         data: data,
-//         latestRanking: data[data.length - 1].y,
-//       };
-//     });
-
-//     const sortedProductsData = productsData.sort(
-//       (a, b) => a.latestRanking - b.latestRanking
-//     );
-
-//     const paginatedProducts = sortedProductsData.slice(offset, offset + limit);
-
-//     const totalCount = sortedProductsData.length;
-//     const totalPages = Math.ceil(totalCount / limit);
-
-//     const nextPage = page + 1;
-//     let nextPageUrl = null;
-//     if (nextPage <= totalPages) {
-//       const baseUrl = `${req.protocol}://${req.get("host")}${req.baseUrl}`;
-//       const queryString = new URLSearchParams({ ...req.query, page: nextPage }).toString();
-//       nextPageUrl = `${baseUrl}?${queryString}`;
-//     }
-
-//     return successResponse(res,'Products fetched successfully', {
-//       products: paginatedProducts.map(({ latestRanking, ...rest }) => rest),
-//       totalCount,
-//       totalPages,
-//       nextPageUrl,
-//     })
-//   } catch (error) {
-//     return errorResponse(res,error.message,500)
-//   }
-// };
 
 const fetchProductRankings = async (req, res) => {
   try {

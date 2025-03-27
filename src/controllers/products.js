@@ -89,7 +89,7 @@ import { eq } from "drizzle-orm";
 
 const fetchProducts = async (req, res) => {
   try {
-    let { page = 1, limit = 10 } = req.query;
+    let { page = 1, limit = 30 } = req.query;
     page = Number(page);
     limit = Number(limit);
     const offset = (page - 1) * limit;
